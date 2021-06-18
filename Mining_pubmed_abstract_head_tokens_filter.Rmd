@@ -1,0 +1,213 @@
+---
+title: "Mining_dependencies"
+output: github_document
+---
+
+Here I limite the set of sentences to the one containing sleep and breakfast.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(pubmedR)
+library(udpipe)
+```
+
+## Functions 
+
+```{r}
+got_abstract <- function(query) {
+  res <- pmQueryTotalCount(query = query, api_key = api_key)
+  print(res$total_count)
+  
+  D <- pmApiRequest(query = query, limit = res$total_count, api_key = NULL)
+  
+  #From the xml-structured object to a “classical” data frame
+  D <- pmApiRequest(query = query, limit = res$total_count, api_key = NULL)
+  
+  M <- pmApi2df(D)
+  str(M)
+  texts<-M$AB
+  
+  return(texts)
+}
+
+```
+
+```{r}
+pipeline_abstract <- function(texts) {
+  texts<-tolower(texts) #required first for stopwords lol
+  abstracts<-data.frame("abstracts"=texts, "doc_id"=c(1:length(texts)))
+  colnames(abstracts)
+  return(abstracts)
+}
+
+```
+
+```{r}
+ud_model <- udpipe_download_model(language = "english-gum")
+ud_model <- udpipe_load_model(ud_model$file_model)
+```
+
+```{r}
+query <- "breakfast*[Title/Abstract] AND sleep*[Title/Abstract] AND english[LA] AND Journal Article[PT]"
+api_key = NULL
+
+```
+
+
+```{r}
+texts<-got_abstract(query)
+abstracts<-pipeline_abstract(texts)
+
+
+x <- udpipe_annotate(ud_model, x = abstracts$abstracts, doc_id = abstracts$doc_id)
+x <- as.data.frame(x)
+
+head(x)
+colnames(x)
+```
+
+## Filtering sentences
+
+```{r}
+
+#idx_sleep<-grep("sleep", x$sentence) 
+idx_sleep<-grep("sleep duration", x$sentence)
+idx_breakfast<-grep("breakfast", x$sentence) 
+
+idx_both<-idx_sleep[which(idx_sleep %in% idx_breakfast)]
+unique(x$sentence[idx_both])
+
+dim(x)
+x<-x[idx_both,]
+dim(x)
+
+```
+
+## Looking at token ID
+
+```{r}
+
+grep_idx_head <- function(x, idx) {
+  idx_head<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$token_id==x[idx,]$head_token_id)
+  return(idx_head)
+}
+
+
+grep_dependencie <- function(x, idx_head, vector_heads) {
+  #nice datastructure is required here
+  #x[idx_head,]$token
+  vector_heads<-c(vector_heads, x[idx_head,]$token)
+  if (x[idx_head,]$head_token_id==0) {
+    return(vector_heads)
+  }
+  idx_head_of_head<-grep_idx_head(x, idx_head)
+  return(grep_dependencie(x, idx_head_of_head, vector_heads))
+}
+```
+
+Tree is probably not the best name, chain of head would be more suitable.
+
+```{r}
+got_tree <- function(x, idx) {
+  
+  vector_heads<-c()
+  idx_head<-grep_idx_head(x, idx)
+  vector_heads<-grep_dependencie(x, idx_head, vector_heads)
+  
+}
+
+```
+
+```{r}
+idx_sleep<-which(x$token=="sleep")
+vector_heads<-c()
+
+list_vector_head<-list()
+for (idx in idx_sleep) {
+  #print(idx)
+  #got_tree(x, idx)
+  print(try(got_tree(x, idx)))
+  
+}
+```
+
+```{r}
+idx_breakfast<-which(x$token=="breakfast")
+vector_heads<-c()
+
+list_vector_head<-list()
+for (idx in idx_breakfast) {
+  #print(idx)
+  #got_tree(x, idx)
+  print(try(got_tree(x, idx)))
+  
+}
+```
+
+Plotting in the form of a tree could be considered.
+
+## Other approaches of using head token
+
+Who have head token id than sleep ?
+
+```{r}
+idx<-121
+x[idx,]$head_token_id
+x[idx,]$doc_id
+x[idx,]$sentence_id
+
+#for the token with same head token
+idx_same_token_id<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$head_token_id==x[idx,]$head_token_id)
+
+x[idx_same_token_id,]$token
+
+head_token<-x[grep_idx_head(x, idx),]$token
+```
+
+```{r}
+for (idx in idx_breakfast) {
+  #print(idx)
+  #got_tree(x, idx)
+  idx_same_token_id<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$head_token_id==x[idx,]$head_token_id)
+  head_token<-x[grep_idx_head(x, idx),]$token
+  print(head_token)
+  print("Associated to")
+  print(x[idx_same_token_id,]$token)
+
+}
+```
+
+## Of whom sleep is a token id?
+
+```{r}
+idx<-121
+x[idx,]$doc_id
+x[idx,]$sentence_id
+
+idx_downstream_token<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$head_token_id==x[idx,]$token_id)
+
+x[idx_downstream_token,]$token
+```
+
+
+```{r}
+for (idx in idx_breakfast) {
+  idx_downstream_token<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$head_token_id==x[idx,]$token_id)
+  
+  print(x[idx_downstream_token,]$token)
+}
+```
+
+```{r}
+for (idx in idx_sleep) {
+  idx_downstream_token<-which(x$doc_id==x[idx,]$doc_id & x$sentence_id==x[idx,]$sentence_id & x$head_token_id==x[idx,]$token_id)
+  
+  print(x[idx_downstream_token,]$token)
+}
+```
+
+

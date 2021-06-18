@@ -1,0 +1,118 @@
+---
+title: "Dependencies parsing on pubmed abstract"
+output: github_document
+---
+
+```{r}
+library(pubmedR)
+library(udpipe)
+library(wordcloud)
+
+```
+
+## Functions 
+
+```{r}
+got_abstract <- function(query) {
+  res <- pmQueryTotalCount(query = query, api_key = api_key)
+  print(res$total_count)
+  
+  D <- pmApiRequest(query = query, limit = res$total_count, api_key = NULL)
+  
+  #From the xml-structured object to a “classical” data frame
+  D <- pmApiRequest(query = query, limit = res$total_count, api_key = NULL)
+  
+  M <- pmApi2df(D)
+  str(M)
+  texts<-M$AB
+  
+  return(texts)
+}
+
+```
+
+```{r}
+pipeline_abstract <- function(texts) {
+  texts<-tolower(texts) #required first for stopwords lol
+  abstracts<-data.frame("abstracts"=texts, "doc_id"=c(1:length(texts)))
+  colnames(abstracts)
+  return(abstracts)
+}
+
+```
+
+```{r}
+ud_model <- udpipe_download_model(language = "english-gum")
+ud_model <- udpipe_load_model(ud_model$file_model)
+```
+
+## Query and abstract collection
+
+```{r}
+query <- "breakfast*[Title/Abstract] AND sleep*[Title/Abstract] AND english[LA] AND Journal Article[PT]"
+api_key = NULL
+
+```
+
+
+```{r}
+texts<-got_abstract(query)
+abstracts<-pipeline_abstract(texts)
+
+
+x <- udpipe_annotate(ud_model, x = abstracts$abstracts, doc_id = abstracts$doc_id)
+x <- as.data.frame(x)
+
+head(x)
+colnames(x)
+```
+
+
+### Dependencie parsing
+
+As described here : https://bnosac.github.io/udpipe/docs/doc7.html 
+
+```{r}
+merged_x <- merge(x, x, 
+               by.x = c("doc_id", "paragraph_id", "sentence_id", "head_token_id"),
+               by.y = c("doc_id", "paragraph_id", "sentence_id", "token_id"),
+               all.x = TRUE, all.y = FALSE, 
+               suffixes = c("", "_parent"), sort = FALSE)
+head(merged_x)
+```
+stats changed to merged_x, so I can run different subset without recreating stats everytime.
+
+```{r}
+vector_of_interest<-c("sleep")
+stats <- subset(merged_x, dep_rel %in% "nsubj" & token %in% vector_of_interest)
+
+display_dependencies <- function(stats) {
+  stats$term <- paste(stats$lemma_parent, stats$lemma, sep = " ")
+  stats <- txt_freq(stats$term)
+  wordcloud(words = stats$key, freq = stats$freq, min.freq = 3, max.words = 100,
+            random.order = FALSE, colors = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02"))
+}
+
+
+display_dependencies(stats)
+```
+
+```{r}
+vector_of_interest<-c("sleep")
+stats <- subset(merged_x, token %in% vector_of_interest)
+display_dependencies(stats)
+
+```
+
+```{r}
+vector_of_interest<-c("fiber")
+stats <- subset(merged_x, token %in% vector_of_interest)
+display_dependencies(stats)
+```
+
+
+
+
+
+
+
