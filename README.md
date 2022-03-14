@@ -1,6 +1,8 @@
 # Mining-pubmed
 A repository where I try different approaches from NLP to mine abstracts from pubmed, mostly to try NLP methods and elucidate links between breakfast/foods and sleep/insomnia.
 
+![some dependencies parsing](https://github.com/Cdk29/Mining-pubmed/blob/main/Mining_pubmed_abstract_files/figure-gfm/unnamed-chunk-9-1.png)
+
 ## Documents
 
 **Mining_pubmed_abstract_head_tokens.md** : find recursively head tokens of texts in order to got an intuition of how the notions like "sleep" are connected to others.
